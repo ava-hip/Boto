@@ -1,5 +1,6 @@
 package fr.avahip.boto;
 
+import fr.avahip.boto.event.DiscordEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -18,5 +19,10 @@ public class BotoApplication {
 
     @EventListener(ApplicationStartedEvent.class)
     public void test() {
+    }
+
+    @EventListener(DiscordEvent.class)
+    public void reactToEvent(DiscordEvent discordEvent) {
+        discordEvent.getEvent().reply("Hello").queue();
     }
 }
