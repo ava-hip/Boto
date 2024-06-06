@@ -5,12 +5,11 @@ import fr.avahip.boto.discord.event.OtherEvent;
 import fr.avahip.boto.discord.event.PingEvent;
 import fr.avahip.boto.discord.models.MySlashCommand;
 import fr.avahip.boto.discord.models.SlashCommand;
-import fr.avahip.boto.management.gifs.GifService;
-import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.events.guild.GuildReadyEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -24,6 +23,7 @@ import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -31,12 +31,13 @@ import java.util.List;
 @Service
 public class Boto extends ListenerAdapter {
     private final JDA jda;
-    private final GifService service;
     private final ApplicationEventPublisher publisher;
+    private final ThreadPoolTaskScheduler scheduler;
+    private Role flopesque;
 
-    public Boto(@Value("${discord.token}") String DISCORD_KEY, GifService service, ApplicationEventPublisher publisher) {
-        this.service = service;
+    public Boto(@Value("${discord.token}") String DISCORD_KEY, ApplicationEventPublisher publisher, ThreadPoolTaskScheduler scheduler) {
         this.publisher = publisher;
+        this.scheduler = scheduler;
         this.jda = JDABuilder.createDefault(DISCORD_KEY).setMemberCachePolicy(MemberCachePolicy.ALL)
                 .enableIntents(GatewayIntent.GUILD_MEMBERS,
                         GatewayIntent.GUILD_MESSAGE_REACTIONS,
@@ -53,6 +54,10 @@ public class Boto extends ListenerAdapter {
     @Override
     public void onGuildReady(@NotNull GuildReadyEvent event) {
         Guild guild = event.getGuild();
+        guild.getRolesByName("FLOPESQUE", false).stream().findAny().ifPresentOrElse(
+                role -> flopesque = role,
+                () -> guild.createRole().setName("FLOPESQUE").queue(role -> flopesque = role)
+        );
         guild.updateCommands().addCommands(mesCommandes.stream().map(MySlashCommand::getData).toList()).queue();
     }
 
@@ -81,6 +86,13 @@ public class Boto extends ListenerAdapter {
 
     @Override
     public void onMessageReceived(MessageReceivedEvent event) {
-        service.findGifUrl(event.getMessage().getContentRaw()).ifPresent(url -> event.getChannel().sendMessage(url).queue());
+        publisher.publishEvent(event);
+        if(event.getMember().getRoles().stream().anyMatch(role -> role.getName().equals("FLOPESQUE"))) {
+            event.getMessage().delete().queue();
+        }
+        if (event.getMessage().getContentRaw().contains("FLOPESQUE")) {
+            event.getGuild().addRoleToMember(event.getMember(), event.getGuild().getRolesByName("FLOPESQUE", false).get(0)).queue();
+        }
     }
+
 }
